@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>五子棋 - 在线对战版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#8B4513',
+                        secondary: '#D2B48C',
+                        accent: '#CD853F',
+                        light: '#F5DEB3',
+                        dark: '#5D4037'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif']
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'bounce-slow': 'bounce 2s infinite'
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .board-grid {
+                background-image: 
+                    linear-gradient(to right, #8B4513 1px, transparent 1px),
+                    linear-gradient(to bottom, #8B4513 1px, transparent 1px);
+            }
+            .piece-shadow {
+                filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+            }
+            .piece-hover {
+                transition: all 0.2s ease;
+            }
+            .piece-hover:hover {
+                transform: scale(1.1);
+            }
+            .chat-message {
+                max-height: 300px;
+                overflow-y: auto;
+            }
+            .waiting-animation {
+                animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            }
+            .glow-effect {
+                box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+            }
+            .winner-glow {
+                box-shadow: 0 0 30px rgba(255, 215, 0, 0.8);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-amber-50 to-orange-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- 游戏标题 -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-primary mb-2">五子棋 - 在线对战</h1>
+            <p class="text-gray-600">连接真实服务器，与全球玩家对战！</p>
+        </header>
+
+        <!-- 主游戏容器 -->
+        <div class="flex flex-col lg:flex-row gap-8">
+            <!-- 左侧游戏区域 -->
+            <div class="lg:w-2/3">
+                <!-- 游戏状态区域 -->
+                <div id="game-status" class="bg-white rounded-lg shadow-lg p-6 mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <div id="connection-status" class="flex items-center">
+                            <div id="status-indicator" class="w-3 h-3 rounded-full bg-red-500 mr-2"></div>
+                            <span id="status-text" class="text-sm font-medium">未连接</span>
+                        </div>
+                        <div id="server-info" class="text-sm text-gray-600">
+                            服务器: <span id="server-url">连接中...</span>
+                        </div>
+                    </div>
+                    
+                    <div id="game-info" class="hidden">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="text-center p-3 bg-light rounded-lg">
+                                <div class="text-sm text-gray-600 mb-1">当前回合</div>
+                                <div id="current-turn" class="text-xl font-bold text-primary">X</div>
+                            </div>
+                            <div class="text-center p-3 bg-light rounded-lg">
+                                <div class="text-sm text-gray-600 mb-1">游戏状态</div>
+                                <div id="game-status-text" class="text-xl font-bold text-green-600">进行中</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 游戏模式选择 -->
+                <div id="game-mode-selection" class="bg-white rounded-lg shadow-lg p-6 mb-6">
+                    <h2 class="text-2xl font-bold text-primary mb-4 text-center">选择游戏模式</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <!-- 快速匹配 -->
+                        <div class="bg-light rounded-lg p-4 text-center cursor-pointer hover:bg-secondary transition-colors duration-200" onclick="showQuickMatch()">
+                            <div class="w-16 h-16 bg-primary rounded-full flex items-center justify-center mx-auto mb-3">
+                                <i class="fa fa-bolt text-white text-2xl"></i>
+                            </div>
+                            <h3 class="text-lg font-semibold mb-2">快速匹配</h3>
+                            <p class="text-sm text-gray-600">自动匹配在线玩家</p>
+                        </div>
+                        
+                        <!-- 创建房间 -->
+                        <div class="bg-light rounded-lg p-4 text-center cursor-pointer hover:bg-secondary transition-colors duration-200" onclick="showCreateRoom()">
+                            <div class="w-16 h-16 bg-primary rounded-full flex items-center justify-center mx-auto mb-3">
+                                <i class="fa fa-plus text-white text-2xl"></i>
+                            </div>
+                            <h3 class="text-lg font-semibold mb-2">创建房间</h3>
+                            <p class="text-sm text-gray-600">创建私人游戏房间</p>
+                        </div>
+                        
+                        <!-- 加入房间 -->
+                        <div class="bg-light rounded-lg p-4 text-center cursor-pointer hover:bg-secondary transition-colors duration-200" onclick="showJoinRoom()">
+                            <div class="w-16 h-16 bg-primary rounded-full flex items-center justify-center mx-auto mb-3">
+                                <i class="fa fa-sign-in text-white text-2xl"></i>
+                            </div>
+                            <h3 class="text-lg font-semibold mb-2">加入房间</h3>
+                            <p class="text-sm text-gray-600">输入房间号加入游戏</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 快速匹配表单 -->
+                <div id="quick-match-form" class="bg-white rounded-lg shadow-lg p-6 mb-6 hidden">
+                    <h2 class="text-2xl font-bold text-primary mb-4 text-center">快速匹配</h2>
+                    
+                    <form onsubmit="startQuickMatch(event)" class="max-w-md mx-auto">
+                        <div class="mb-4">
+                            <label for="quick-match-name" class="block text-sm font-medium text-gray-700 mb-2">
+                                输入您的用户名
+                            </label>
+                            <input type="text" id="quick-match-name" name="username" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                                placeholder="请输入您的用户名" required maxlength="20">
+                        </div>
+                        
+                        <div class="flex gap-4">
+                            <button type="submit" class="flex-1 bg-primary text-white py-2 px-6 rounded-lg hover:bg-dark transition-colors duration-200">
+                                开始匹配
+                            </button>
+                            <button type="button" onclick="backToGameMode()" class="bg-gray-300 text-gray-700 py-2 px-6 rounded-lg hover:bg-gray-400 transition-colors duration-200">
+                                返回
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- 创建房间表单 -->
+                <div id="create-room-form" class="bg-white rounded-lg shadow-lg p-6 mb-6 hidden">
+                    <h2 class="text-2xl font-bold text-primary mb-4 text-center">创建房间</h2>
+                    
+                    <form onsubmit="createRoom(event)" class="max-w-md mx-auto">
+                        <div class="mb-4">
+                            <label for="create-room-name" class="block text-sm font-medium text-gray-700 mb-2">
+                                输入您的用户名
+                            </label>
+                            <input type="text" id="create-room-name" name="username" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                                placeholder="请输入您的用户名" required maxlength="20">
+                        </div>
+                        
+                        <div class="flex gap-4">
+                            <button type="submit" class="flex-1 bg-primary text-white py-2 px-6 rounded-lg hover:bg-dark transition-colors duration-200">
+                                创建房间
+                            </button>
+                            <button type="button" onclick="backToGameMode()" class="bg-gray-300 text-gray-700 py-2 px-6 rounded-lg hover:bg-gray-400 transition-colors duration-200">
+                                返回
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- 加入房间表单 -->
+                <div id="join-room-form" class="bg-white rounded-lg shadow-lg p-6 mb-6 hidden">
+                    <h2 class="text-2xl font-bold text-primary mb-4 text-center">加入房间</h2>
+                    
+                    <form onsubmit="joinRoom(event)" class="max-w-md mx-auto">
+                        <div class="mb-4">
+                            <label for="join-room-name" class="block text-sm font-medium text-gray-700 mb-2">
+                                输入您的用户名
+                            </label>
+                            <input type="text" id="join-room-name" name="username" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                                placeholder="请输入您的用户名" required maxlength="20">
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label for="join-room-id" class="block text-sm font-medium text-gray-700 mb-2">
+                                输入房间号
+                            </label>
+                            <input type="text" id="join-room-id" name="roomId" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                                placeholder="请输入房间号" required maxlength="8">
+                        </div>
+                        
+                        <div class="flex gap-4">
+                            <button type="submit" class="flex-1 bg-primary text-white py-2 px-6 rounded-lg hover:bg-dark transition-colors duration-200">
+                                加入房间
+                            </button>
+                            <button type="button" onclick="backToGameMode()" class="bg-gray-300 text-gray-700 py-2 px-6 rounded-lg hover:bg-gray-400 transition-colors duration-200">
+                                返回
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- 等待匹配区域 -->
+                <div id="waiting-area" class="bg-white rounded-lg shadow-lg p-6 mb-6 hidden">
+                    <div class="text-center">
+                        <div class="w-20 h-20 bg-primary rounded-full flex items-center justify-center mx-auto mb-4 waiting-animation">
+                            <i class="fa fa-spinner fa-spin text-white text-3xl"></i>
+                        </div>
+                        <h3 id="waiting-message" class="text-xl font-semibold mb-2">正在等待匹配...</h3>
+                        <p id="waiting-details" class="text-gray-600 mb-6">系统正在为您寻找合适的对手</p>
+                        
+                        <div id="waiting-stats" class="mb-6">
+                            <div class="inline-block bg-light rounded-lg p-4">
+                                <div class="text-sm text-gray-600 mb-1">当前等待人数</div>
+                                <div id="waiting-count" class="text-2xl font-bold text-primary">0</div>
+                            </div>
+                        </div>
+                        
+                        <button onclick="cancelMatch()" class="bg-red-600 text-white py-2 px-6 rounded-lg hover:bg-red-700 transition-colors duration-200">
+                            取消匹配
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 房间等待区域 -->
+                <div id="room-waiting-area" class="bg-white rounded-lg shadow-lg p-6 mb-6 hidden">
+                    <div class="text-center">
+                        <div class="w-20 h-20 bg-primary rounded-full flex items-center justify-center mx-auto mb-4">
+                            <i class="fa fa-users text-white text-3xl"></i>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-2">房间已创建</h3>
+                        <p class="text-gray-600 mb-4">等待其他玩家加入...</p>
+                        
+                        <div class="bg-light rounded-lg p-4 inline-block mb-6">
+                            <div class="text-sm text-gray-600 mb-1">房间号</div>
+                            <div id="room-id-display" class="text-2xl font-bold text-primary">--</div>
+                        </div>
+                        
+                        <div id="room-players" class="mb-6">
+                            <h4 class="text-lg font-semibold mb-2">当前玩家</h4>
+                            <div id="players-list" class="space-y-2">
+                                <!-- 玩家列表将在这里动态生成 -->
+                            </div>
+                        </div>
+                        
+                        <button onclick="leaveRoom()" class="bg-red-600 text-white py-2 px-6 rounded-lg hover:bg-red-700 transition-colors duration-200">
+                            离开房间
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 游戏棋盘 -->
+                <div id="game-board-container" class="hidden">
+                    <div class="bg-white rounded-lg shadow-lg p-6">
+                        <div class="relative">
+                            <canvas id="game-board" class="w-full max-w-2xl mx-auto board-grid bg-secondary rounded-lg" width="600" height="600"></canvas>
+                            
+                            <!-- 游戏控制按钮 -->
+                            <div id="game-controls" class="mt-6 flex justify-center gap-4">
+                                <button onclick="restartGame()" class="bg-primary text-white py-2 px-6 rounded-lg hover:bg-dark transition-colors duration-200">
+                                    重新开始
+                                </button>
+                                <button onclick="leaveGame()" class="bg-red-600 text-white py-2 px-6 rounded-lg hover:bg-red-700 transition-colors duration-200">
+                                    离开游戏
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧信息面板 -->
+            <div class="lg:w-1/3">
+                <!-- 玩家信息 -->
+                <div id="players-info" class="bg-white rounded-lg shadow-lg p-6 mb-6 hidden">
+                    <h3 class="text-xl font-bold text-primary mb-4">玩家信息</h3>
+                    
+                    <div class="space-y-4">
+                        <div id="player1-info" class="flex items-center p-3 bg-light rounded-lg">
+                            <div class="w-12 h-12 bg-primary rounded-full flex items-center justify-center mr-4">
+                                <span id="player1-symbol" class="text-white text-xl font-bold">X</span>
+                            </div>
+                            <div class="flex-1">
+                                <div id="player1-name" class="font-semibold">玩家1</div>
+                                <div id="player1-status" class="text-sm text-gray-600">在线</div>
+                            </div>
+                            <div id="player1-turn-indicator" class="w-4 h-4 rounded-full bg-green-500 hidden"></div>
+                        </div>
+                        
+                        <div id="player2-info" class="flex items-center p-3 bg-light rounded-lg">
+                            <div class="w-12 h-12 bg-gray-400 rounded-full flex items-center justify-center mr-4">
+                                <span id="player2-symbol" class="text-white text-xl font-bold">O</span>
+                            </div>
+                            <div class="flex-1">
+                                <div id="player2-name" class="font-semibold">等待中...</div>
+                                <div id="player2-status" class="text-sm text-gray-600">离线</div>
+                            </div>
+                            <div id="player2-turn-indicator" class="w-4 h-4 rounded-full bg-green-500 hidden"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 聊天区域 -->
+                <div id="chat-area" class="bg-white rounded-lg shadow-lg p-6 mb-6 hidden">
+                    <h3 class="text-xl font-bold text-primary mb-4">聊天</h3>
+                    
+                    <div id="chat-messages" class="chat-message bg-gray-50 rounded-lg p-4 mb-4 h-64">
+                        <!-- 聊天消息将在这里动态生成 -->
+                    </div>
+                    
+                    <form onsubmit="sendChatMessage(event)" class="flex gap-2">
+                        <input type="text" id="chat-input" 
+                            class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary"
+                            placeholder="输入消息..." maxlength="200">
+                        <button type="submit" class="bg-primary text-white py-2 px-4 rounded-lg hover:bg-dark transition-colors duration-200">
+                            发送
+                        </button>
+                    </form>
+                </div>
+
+                <!-- 游戏历史 -->
+                <div id="game-history" class="bg-white rounded-lg shadow-lg p-6 hidden">
+                    <h3 class="text-xl font-bold text-primary mb-4">游戏历史</h3>
+                    
+                    <div id="move-history" class="max-h-64 overflow-y-auto">
+                        <div class="text-center text-gray-500 py-4">
+                            游戏尚未开始
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 服务器状态 -->
+                <div id="server-status-panel" class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-bold text-primary mb-4">服务器状态</h3>
+                    
+                    <div class="space-y-3">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">在线用户:</span>
+                            <span id="online-users" class="font-semibold">0</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">活跃房间:</span>
+                            <span id="active-rooms" class="font-semibold">0</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">服务器时间:</span>
+                            <span id="server-time" class="font-semibold">--</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">延迟:</span>
+                            <span id="ping-time" class="font-semibold">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 游戏结束弹窗 -->
+    <div id="game-over-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
+            <div class="text-center">
+                <div id="winner-icon" class="w-20 h-20 bg-primary rounded-full flex items-center justify-center mx-auto mb-4 winner-glow">
+                    <i class="fa fa-trophy text-white text-3xl"></i>
+                </div>
+                
+                <h3 id="game-over-title" class="text-2xl font-bold mb-4">游戏结束</h3>
+                <p id="game-over-message" class="text-lg mb-6">X方获胜！</p>
+                
+                <div class="flex gap-4 justify-center">
+                    <button onclick="restartGame()" class="bg-primary text-white py-2 px-6 rounded-lg hover:bg-dark transition-colors duration-200">
+                        再来一局
+                    </button>
+                    <button onclick="closeGameOverModal()" class="bg-gray-300 text-gray-700 py-2 px-6 rounded-lg hover:bg-gray-400 transition-colors duration-200">
+                        关闭
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 错误弹窗 -->
+    <div id="error-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-2xl p-6 max-w-md w-full mx-4">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fa fa-exclamation-triangle text-white text-2xl"></i>
+                </div>
+                
+                <h3 class="text-xl font-bold mb-2">错误</h3>
+                <p id="error-message" class="text-gray-600 mb-6">发生错误，请重试</p>
+                
+                <button onclick="closeErrorModal()" class="bg-primary text-white py-2 px-6 rounded-lg hover:bg-dark transition-colors duration-200">
+                    确定
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let socket;
+        let currentUser = null;
+        let currentRoomId = null;
+        let gameBoard = null;
+        let ctx = null;
+        let cellSize = 40;
+        let boardSize = 15;
+        let gameStarted = false;
+        let currentTurn = 'X';
+        let playerSymbol = null;
+        let gameBoardData = Array(boardSize).fill().map(() => Array(boardSize).fill(null));
+        let pingInterval = null;
+        let lastPingTime = 0;
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeGame();
+            connectToServer();
+        });
+
+        // 初始化游戏
+        function initializeGame() {
+            const canvas = document.getElementById('game-board');
+            if (canvas) {
+                ctx = canvas.getContext('2d');
+                gameBoard = canvas;
+                
+                // 设置画布事件监听
+                canvas.addEventListener('click', handleCanvasClick);
+                canvas.addEventListener('mousemove', handleCanvasMouseMove);
+                
+                // 调整画布大小
+                resizeCanvas();
+                window.addEventListener('resize', resizeCanvas);
+            }
+        }
+
+        // 连接到服务器
+        function connectToServer() {
+            try {
+                // 自动检测服务器地址
+                const serverUrl = getServerUrl();
+                document.getElementById('server-url').textContent = serverUrl;
+                
+                socket = io(serverUrl, {
+                    transports: ['websocket'],
+                    timeout: 10000
+                });
+
+                // 连接事件
+                socket.on('connect', () => {
+                    console.log('连接到服务器成功');
+                    updateConnectionStatus(true);
+                    startPingInterval();
+                    fetchServerStatus();
+                });
+
+                socket.on('disconnect', () => {
+                    console.log('与服务器断开连接');
+                    updateConnectionStatus(false);
+                    stopPingInterval();
+                });
+
+                socket.on('connect_error', (error) => {
+                    console.error('连接错误:', error);
+                    updateConnectionStatus(false);
+                    showError('无法连接到服务器，请稍后重试');
+                });
+
+                // 游戏事件
+                socket.on('waiting', handleWaiting);
+                socket.on('waiting_list_update', handleWaitingListUpdate);
+                socket.on('match_found', handleMatchFound);
+                socket.on('room_created', handleRoomCreated);
+                socket.on('player_joined', handlePlayerJoined);
+                socket.on('player_left', handlePlayerLeft);
+                socket.on('player_disconnected', handlePlayerDisconnected);
+                socket.on('game_started', handleGameStarted);
+                socket.on('move_made', handleMoveMade);
+                socket.on('game_over', handleGameOver);
+                socket.on('game_reset', handleGameReset);
+                socket.on('room_closed', handleRoomClosed);
+                socket.on('chat_message', handleChatMessage);
+                socket.on('global_chat_message', handleGlobalChatMessage);
+                socket.on('error', handleError);
+
+                // 心跳检测
+                socket.on('pong', handlePong);
+
+            } catch (error) {
+                console.error('连接服务器失败:', error);
+                updateConnectionStatus(false);
+                showError('初始化连接失败，请刷新页面重试');
+            }
+        }
+
+        // 获取服务器URL
+        function getServerUrl() {
+            // 优先使用环境变量中的服务器地址
+            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                return 'http://localhost:3000';
+            }
+            
+            // 检测是否在GitHub Codespaces中
+            if (window.location.hostname.includes('githubpreview.dev')) {
+                // 从URL中提取端口号
+                const port = window.location.port || 80;
+                return `http://${window.location.hostname}:${port}`;
+            }
+            
+            // 默认使用当前域名
+            const protocol = window.location.protocol;
+            const hostname = window.location.hostname;
+            const port = window.location.port ? `:${window.location.port}` : '';
+            return `${protocol}//${hostname}${port}`;
+        }
+
+        // 更新连接状态
+        function updateConnectionStatus(connected) {
+            const indicator = document.getElementById('status-indicator');
+            const text = document.getElementById('status-text');
+            
+            if (connected) {
+                indicator.className = 'w-3 h-3 rounded-full bg-green-500 mr-2';
+                text.textContent = '已连接';
+                text.className = 'text-sm font-medium text-green-600';
+            } else {
+                indicator.className = 'w-3 h-3 rounded-full bg-red-500 mr-2';
+                text.textContent = '未连接';
+                text.className = 'text-sm font-medium text-red-600';
+            }
+        }
+
+        // 开始心跳检测
+        function startPingInterval() {
+            pingInterval = setInterval(() => {
+                if (socket && socket.connected) {
+                    lastPingTime = Date.now();
+                    socket.emit('ping');
+                }
+            }, 5000);
+        }
+
+        // 停止心跳检测
+        function stopPingInterval() {
+            if (pingInterval) {
+                clearInterval(pingInterval);
+                pingInterval = null;
+            }
+        }
+
+        // 处理心跳响应
+        function handlePong(data) {
+            const pingTime = Date.now() - lastPingTime;
+            document.getElementById('ping-time').textContent = `${pingTime}ms`;
+        }
+
+        // 获取服务器状态
+        function fetchServerStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('online-users').textContent = data.onlineUsers || 0;
+                    document.getElementById('active-rooms').textContent = data.activeRooms || 0;
+                    document.getElementById('server-time').textContent = new Date(data.serverTime).toLocaleString('zh-CN');
+                })
+                .catch(error => {
+                    console.error('获取服务器状态失败:', error);
+                });
+        }
+
+        // 调整画布大小
+        function resizeCanvas() {
+            if (!gameBoard) return;
+            
+            const container = gameBoard.parentElement;
+            const maxSize = Math.min(container.clientWidth, 600);
+            const size = Math.floor(maxSize / boardSize) * boardSize;
+            
+            gameBoard.width = size;
+            gameBoard.height = size;
+            cellSize = size / boardSize;
+            
+            drawBoard();
+        }
+
+        // 绘制棋盘
+        function drawBoard() {
+            if (!ctx || !gameBoard) return;
+            
+            const size = gameBoard.width;
+            
+            // 清空画布
+            ctx.clearRect(0, 0, size, size);
+            
+            // 绘制背景
+            ctx.fillStyle = '#D2B48C';
+            ctx.fillRect(0, 0, size, size);
+            
+            // 绘制网格
+            ctx.strokeStyle = '#8B4513';
+            ctx.lineWidth = 1;
+            
+            for (let i = 0; i <= boardSize; i++) {
+                const pos = i * cellSize;
+                
+                // 垂直线
+                ctx.beginPath();
+                ctx.moveTo(pos, 0);
+                ctx.lineTo(pos, size);
+                ctx.stroke();
+                
+                // 水平线
+                ctx.beginPath();
+                ctx.moveTo(0, pos);
+                ctx.lineTo(size, pos);
+                ctx.stroke();
+            }
+            
+            // 绘制天元和星位
+            const starPositions = [
+                {x: 3, y: 3}, {x: 3, y: 7}, {x: 3, y: 11},
+                {x: 7, y: 3}, {x: 7, y: 7}, {x: 7, y: 11},
+                {x: 11, y: 3}, {x: 11, y: 7}, {x: 11, y: 11}
+            ];
+            
+            ctx.fillStyle = '#8B4513';
+            starPositions.forEach(pos => {
+                const x = pos.x * cellSize;
+                const y = pos.y * cellSize;
+                const radius = cellSize / 8;
+                
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                ctx.fill();
+            });
+            
+            // 绘制棋子
+            for (let y = 0; y < boardSize; y++) {
+                for (let x = 0; x < boardSize; x++) {
+                    if (gameBoardData[y][x]) {
+                        drawPiece(x, y, gameBoardData[y][x]);
+                    }
+                }
+            }
+        }
+
+        // 绘制棋子
+        function drawPiece(x, y, symbol) {
+            if (!ctx) return;
+            
+            const centerX = x * cellSize;
+            const centerY = y * cellSize;
+            const radius = cellSize / 2 - 2;
+            
+            // 绘制棋子主体
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+            ctx.fillStyle = symbol === 'X' ? '#000000' : '#FFFFFF';
+            ctx.fill();
+            
+            // 绘制边框
+            ctx.strokeStyle = '#8B4513';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            
+            // 如果是白色棋子，绘制黑色边框
+            if (symbol === 'O') {
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+        }
+
+        // 处理画布点击
+        function handleCanvasClick(event) {
+            if (!gameStarted || !playerSymbol || currentTurn !== playerSymbol) {
+                return;
+            }
+            
+            const rect = gameBoard.getBoundingClientRect();
+            const x = Math.floor((event.clientX - rect.left) / cellSize);
+            const y = Math.floor((event.clientY - rect.top) / cellSize);
+            
+            // 检查位置是否有效
+            if (x >= 0 && x < boardSize && y >= 0 && y < boardSize && !gameBoardData[y][x]) {
+                makeMove(x, y);
+            }
+        }
+
+        // 处理鼠标移动
+        function handleCanvasMouseMove(event) {
+            if (!gameStarted || !playerSymbol || currentTurn !== playerSymbol) {
+                gameBoard.style.cursor = 'default';
+                return;
+            }
+            
+            const rect = gameBoard.getBoundingClientRect();
+            const x = Math.floor((event.clientX - rect.left) / cellSize);
+            const y = Math.floor((event.clientY - rect.top) / cellSize);
+            
+            if (x >= 0 && x < boardSize && y >= 0 && y < boardSize && !gameBoardData[y][x]) {
+                gameBoard.style.cursor = 'pointer';
+            } else {
+                gameBoard.style.cursor = 'default';
+            }
+        }
+
+        // 下棋
+        function makeMove(x, y) {
+            if (socket && socket.connected) {
+                socket.emit('make_move', { x, y });
+            }
+        }
+
+        // 显示游戏模式选择
+        function showGameMode() {
+            document.getElementById('game-mode-selection').classList.remove('hidden');
+            document.getElementById('quick-match-form').classList.add('hidden');
+            document.getElementById('create-room-form').classList.add('hidden');
+            document.getElementById('join-room-form').classList.add('hidden');
+            document.getElementById('waiting-area').classList.add('hidden');
+            document.getElementById('room-waiting-area').classList.add('hidden');
+        }
+
+        // 显示快速匹配
+        function showQuickMatch() {
+            document.getElementById('game-mode-selection').classList.add('hidden');
+            document.getElementById('quick-match-form').classList.remove('hidden');
+            document.getElementById('create-room-form').classList.add('hidden');
+            document.getElementById('join-room-form').classList.add('hidden');
+        }
+
+        // 显示创建房间
+        function showCreateRoom() {
+            document.getElementById('game-mode-selection').classList.add('hidden');
+            document.getElementById('quick-match-form').classList.add('hidden');
+            document.getElementById('create-room-form').classList.remove('hidden');
+            document.getElementById('join-room-form').classList.add('hidden');
+        }
+
+        // 显示加入房间
+        function showJoinRoom() {
+            document.getElementById('game-mode-selection').classList.add('hidden');
+            document.getElementById('quick-match-form').classList.add('hidden');
+            document.getElementById('create-room-form').classList.add('hidden');
+            document.getElementById('join-room-form').classList.remove('hidden');
+        }
+
+        // 返回游戏模式选择
+        function backToGameMode() {
+            showGameMode();
+        }
+
+        // 开始快速匹配
+        function startQuickMatch(event) {
+            event.preventDefault();
+            
+            const username = document.getElementById('quick-match-name').value.trim();
+            
+            if (!username) {
+                showError('请输入用户名');
+                return;
+            }
+            
+            if (socket && socket.connected) {
+                currentUser = { name: username };
+                socket.emit('join_game', { username });
+                
+                // 显示等待区域
+                document.getElementById('quick-match-form').classList.add('hidden');
+                document.getElementById('waiting-area').classList.remove('hidden');
+            } else {
+                showError('未连接到服务器，请检查网络连接');
+            }
+        }
+
+        // 创建房间
+        function createRoom(event) {
+            event.preventDefault();
+            
+            const username = document.getElementById('create-room-name').value.trim();
+            
+            if (!username) {
+                showError('请输入用户名');
+                return;
+            }
+            
+            if (socket && socket.connected) {
+                currentUser = { name: username };
+                socket.emit('create_room', { username });
+                
+                // 显示等待区域
+                document.getElementById('create-room-form').classList.add('hidden');
+                document.getElementById('room-waiting-area').classList.remove('hidden');
+            } else {
+                showError('未连接到服务器，请检查网络连接');
+            }
+        }
+
+        // 加入房间
+        function joinRoom(event) {
+            event.preventDefault();
+            
+            const username = document.getElementById('join-room-name').value.trim();
+            const roomId = document.getElementById('join-room-id').value.trim();
+            
+            if (!username) {
+                showError('请输入用户名');
+                return;
+            }
+            
+            if (!roomId) {
+                showError('请输入房间号');
+                return;
+            }
+            
+            if (socket && socket.connected) {
+                currentUser = { name: username };
+                socket.emit('join_room', { username, roomId });
+                
+                // 显示等待区域
+                document.getElementById('join-room-form').classList.add('hidden');
+                document.getElementById('waiting-area').classList.remove('hidden');
+                document.getElementById('waiting-message').textContent = '正在加入房间...';
+                document.getElementById('waiting-details').textContent = `正在加入房间 ${roomId}`;
+            } else {
+                showError('未连接到服务器，请检查网络连接');
+            }
+        }
+
+        // 取消匹配
+        function cancelMatch() {
+            if (socket && socket.connected) {
+                // 这里可以发送取消匹配的事件
+                socket.emit('leave_room');
+            }
+            
+            // 重置状态
+            currentUser = null;
+            currentRoomId = null;
+            
+            // 返回游戏模式选择
+            document.getElementById('waiting-area').classList.add('hidden');
+            showGameMode();
+        }
+
+        // 离开房间
+        function leaveRoom() {
+            if (socket && socket.connected) {
+                socket.emit('leave_room');
+            }
+            
+            // 重置状态
+            currentUser = null;
+            currentRoomId = null;
+            
+            // 返回游戏模式选择
+            document.getElementById('room-waiting-area').classList.add('hidden');
+            showGameMode();
+        }
+
+        // 离开游戏
+        function leaveGame() {
+            if (socket && socket.connected) {
+                socket.emit('leave_room');
+            }
+            
+            // 重置游戏状态
+            resetGameState();
+            
+            // 返回游戏模式选择
+            document.getElementById('game-board-container').classList.add('hidden');
+            document.getElementById('players-info').classList.add('hidden');
+            document.getElementById('chat-area').classList.add('hidden');
+            document.getElementById('game-history').classList.add('hidden');
+            document.getElementById('game-info').classList.add('hidden');
+            showGameMode();
+        }
+
+        // 重新开始游戏
+        function restartGame() {
+            if (socket && socket.connected) {
+                socket.emit('restart_game');
+            }
+            
+            closeGameOverModal();
+        }
+
+        // 重置游戏状态
+        function resetGameState() {
+            gameStarted = false;
+            currentTurn = 'X';
+            playerSymbol = null;
+            gameBoardData = Array(boardSize).fill().map(() => Array(boardSize).fill(null));
+            drawBoard();
+            
+            // 清空聊天记录
+            document.getElementById('chat-messages').innerHTML = '';
+            
+            // 清空游戏历史
+            document.getElementById('move-history').innerHTML = `
+                <div class="text-center text-gray-500 py-4">
+                    游戏尚未开始
+                </div>
+            `;
+        }
+
+        // 发送聊天消息
+        function sendChatMessage(event) {
+            event.preventDefault();
+            
+            const message = document.getElementById('chat-input').value.trim();
+            
+            if (!message) return;
+            
+            if (socket && socket.connected) {
+                socket.emit('chat_message', { message });
+            }
+            
+            // 清空输入框
+            document.getElementById('chat-input').value = '';
+        }
+
+        // 关闭游戏结束弹窗
+        function closeGameOverModal() {
+            document.getElementById('game-over-modal').classList.add('hidden');
+        }
+
+        // 关闭错误弹窗
+        function closeErrorModal() {
+            document.getElementById('error-modal').classList.add('hidden');
+        }
+
+        // 显示错误
+        function showError(message) {
+            document.getElementById('error-message').textContent = message;
+            document.getElementById('error-modal').classList.remove('hidden');
+        }
+
+        // 事件处理器
+        function handleWaiting(data) {
+            document.getElementById('waiting-message').textContent = data.message;
+            document.getElementById('waiting-count').textContent = data.waitingCount || 0;
+        }
+
+        function handleWaitingListUpdate(data) {
+            document.getElementById('waiting-count').textContent = data.waitingCount || 0;
+        }
+
+        function handleMatchFound(data) {
+            currentRoomId = data.roomId;
+            
+            // 更新玩家信息
+            updatePlayersInfo(data.players);
+            
+            // 显示游戏界面
+            document.getElementById('waiting-area').classList.add('hidden');
+            document.getElementById('game-board-container').classList.remove('hidden');
+            document.getElementById('players-info').classList.remove('hidden');
+            document.getElementById('chat-area').classList.remove('hidden');
+            document.getElementById('game-history').classList.remove('hidden');
+            document.getElementById('game-info').classList.remove('hidden');
+            
+            // 添加系统消息
+            addChatMessage('系统', '系统', '游戏即将开始，请准备...', true);
+        }
+
+        function handleRoomCreated(data) {
+            currentRoomId = data.roomId;
+            playerSymbol = data.playerSymbol;
+            
+            document.getElementById('room-id-display').textContent = data.roomId;
+            
+            // 更新玩家列表
+            updatePlayersList([{ id: socket.id, name: currentUser.name, symbol: 'X' }]);
+        }
+
+        function handlePlayerJoined(data) {
+            currentRoomId = data.roomId;
+            
+            // 更新玩家列表
+            updatePlayersList(data.players);
+            
+            // 添加系统消息
+            addChatMessage('系统', '系统', data.message, true);
+        }
+
+        function handlePlayerLeft(data) {
+            // 更新玩家列表
+            updatePlayersList(data.remainingPlayers);
+            
+            // 添加系统消息
+            addChatMessage('系统', '系统', data.message, true);
+        }
+
+        function handlePlayerDisconnected(data) {
+            // 更新玩家列表
+            updatePlayersList(data.remainingPlayers);
+            
+            // 添加系统消息
+            addChatMessage('系统', '系统', data.message, true);
+        }
+
+        function handleGameStarted(data) {
+            gameStarted = true;
+            currentTurn = data.currentTurn;
+            
+            // 更新当前回合指示器
+            updateTurnIndicator();
+            
+            // 添加系统消息
+            addChatMessage('系统', '系统', data.message, true);
+            
+            // 更新游戏历史
+            updateMoveHistory();
+        }
+
+        function handleMoveMade(data) {
+            // 更新棋盘数据
+            gameBoardData = data.board;
+            drawBoard();
+            
+            // 更新当前回合
+            currentTurn = data.currentTurn;
+            updateTurnIndicator();
+            
+            // 添加聊天消息
+            addChatMessage(data.playerName, data.symbol, `在 (${data.x},${data.y}) 位置下棋`, false);
+            
+            // 更新游戏历史
+            addMoveHistory(data);
+        }
+
+        function handleGameOver(data) {
+            gameStarted = false;
+            
+            // 显示游戏结束弹窗
+            const title = data.winner ? `${data.winnerName} 获胜！` : '平局！';
+            const message = data.message || (data.winner ? `${data.winner}方获胜！` : '平局！');
+            
+            document.getElementById('game-over-title').textContent = title;
+            document.getElementById('game-over-message').textContent = message;
+            
+            const icon = document.getElementById('winner-icon');
+            if (data.winner) {
+                icon.innerHTML = '<i class="fa fa-trophy text-white text-3xl"></i>';
+            } else {
+                icon.innerHTML = '<i class="fa fa-handshake-o text-white text-3xl"></i>';
+            }
+            
+            document.getElementById('game-over-modal').classList.remove('hidden');
+            
+            // 添加系统消息
+            addChatMessage('系统', '系统', message, true);
+        }
+
+        function handleGameReset(data) {
+            resetGameState();
+            
+            // 添加系统消息
+            addChatMessage('系统', '系统', data.message, true);
+        }
+
+        function handleRoomClosed(data) {
+            // 重置状态
+            currentUser = null;
+            currentRoomId = null;
+            
+            // 返回游戏模式选择
+            document.getElementById('room-waiting-area').classList.add('hidden');
+            document.getElementById('game-board-container').classList.add('hidden');
+            document.getElementById('players-info').classList.add('hidden');
+            document.getElementById('chat-area').classList.add('hidden');
+            document.getElementById('game-history').classList.add('hidden');
+            document.getElementById('game-info').classList.add('hidden');
+            
+            showGameMode();
+            showError(data.message);
+        }
+
+        function handleChatMessage(data) {
+            addChatMessage(data.playerName, data.playerSymbol, data.message, false);
+        }
+
+        function handleGlobalChatMessage(data) {
+            addChatMessage(data.playerName, data.playerSymbol, data.message, false);
+        }
+
+        function handleError(data) {
+            showError(data.message);
+        }
+
+        // 更新玩家信息
+        function updatePlayersInfo(players) {
+            players.forEach((player, index) => {
+                if (player.id === socket.id) {
+                    playerSymbol = player.symbol;
+                }
+                
+                const infoElement = document.getElementById(`player${index + 1}-info`);
+                const nameElement = document.getElementById(`player${index + 1}-name`);
+                const symbolElement = document.getElementById(`player${index + 1}-symbol`);
+                const statusElement = document.getElementById(`player${index + 1}-status`);
+                
+                if (infoElement && nameElement && symbolElement && statusElement) {
+                    nameElement.textContent = player.name;
+                    symbolElement.textContent = player.symbol;
+                    statusElement.textContent = '在线';
+                    
+                    if (player.symbol === 'X') {
+                        symbolElement.parentElement.className = 'w-12 h-12 bg-primary rounded-full flex items-center justify-center mr-4';
+                    } else {
+                        symbolElement.parentElement.className = 'w-12 h-12 bg-gray-400 rounded-full flex items-center justify-center mr-4';
+                    }
+                }
+            });
+        }
+
+        // 更新玩家列表
+        function updatePlayersList(players) {
+            const playersList = document.getElementById('players-list');
+            playersList.innerHTML = '';
+            
+            players.forEach(player => {
+                const playerElement = document.createElement('div');
+                playerElement.className = 'flex items-center p-2 bg-light rounded-lg';
+                playerElement.innerHTML = `
+                    <div class="w-8 h-8 bg-primary rounded-full flex items-center justify-center mr-3">
+                        <span class="text-white text-sm font-bold">${player.symbol}</span>
+                    </div>
+                    <div class="flex-1">
+                        <div class="font-semibold text-sm">${player.name}</div>
+                        <div class="text-xs text-gray-600">在线</div>
+                    </div>
+                `;
+                playersList.appendChild(playerElement);
+            });
+            
+            // 如果只有一个玩家，显示等待中
+            if (players.length === 1) {
+                const waitingElement = document.createElement('div');
+                waitingElement.className = 'flex items-center p-2 bg-gray-100 rounded-lg';
+                waitingElement.innerHTML = `
+                    <div class="w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center mr-3">
+                        <span class="text-white text-sm font-bold">O</span>
+                    </div>
+                    <div class="flex-1">
+                        <div class="font-semibold text-sm text-gray-500">等待中...</div>
+                        <div class="text-xs text-gray-500">离线</div>
+                    </div>
+                `;
+                playersList.appendChild(waitingElement);
+            }
+        }
+
+        // 更新回合指示器
+        function updateTurnIndicator() {
+            document.getElementById('current-turn').textContent = currentTurn;
+            
+            const player1Turn = document.getElementById('player1-turn-indicator');
+            const player2Turn = document.getElementById('player2-turn-indicator');
+            
+            player1Turn.classList.toggle('hidden', currentTurn !== 'X');
+            player2Turn.classList.toggle('hidden', currentTurn !== 'O');
+            
+            // 更新游戏状态文本
+            document.getElementById('game-status-text').textContent = gameStarted ? '进行中' : '准备中';
+        }
+
+        // 添加聊天消息
+        function addChatMessage(username, symbol, message, isSystem) {
+            const chatMessages = document.getElementById('chat-messages');
+            const messageElement = document.createElement('div');
+            
+            if (isSystem) {
+                messageElement.className = 'mb-2 p-2 bg-gray-100 rounded-lg text-center';
+                messageElement.innerHTML = `
+                    <span class="text-sm font-semibold text-gray-600">${message}</span>
+                `;
+            } else {
+                const isCurrentUser = username === currentUser?.name;
+                const alignClass = isCurrentUser ? 'justify-end' : 'justify-start';
+                
+                messageElement.className = `flex ${alignClass} mb-2`;
+                messageElement.innerHTML = `
+                    <div class="max-w-[80%]">
+                        <div class="flex items-center mb-1">
+                            <div class="w-6 h-6 bg-primary rounded-full flex items-center justify-center mr-2">
+                                <span class="text-white text-xs font-bold">${symbol}</span>
+                            </div>
+                            <span class="text-xs font-semibold text-gray-600">${username}</span>
+                        </div>
+                        <div class="p-2 rounded-lg ${isCurrentUser ? 'bg-primary text-white' : 'bg-gray-100 text-gray-800'}">
+                            <span class="text-sm">${message}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            chatMessages.appendChild(messageElement);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // 添加移动历史
+        function addMoveHistory(data) {
+            const moveHistory = document.getElementById('move-history');
+            
+            // 如果是第一条记录，清空初始消息
+            if (moveHistory.querySelector('.text-gray-500')) {
+                moveHistory.innerHTML = '';
+            }
+            
+            const moveElement = document.createElement('div');
+            moveElement.className = 'mb-2 p-2 bg-light rounded-lg';
+            moveElement.innerHTML = `
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center">
+                        <div class="w-6 h-6 bg-primary rounded-full flex items-center justify-center mr-2">
+                            <span class="text-white text-xs font-bold">${data.symbol}</span>
+                        </div>
+                        <span class="font-semibold text-sm">${data.playerName}</span>
+                    </div>
+                    <span class="text-xs text-gray-600">第 ${gameBoardData.flat().filter(cell => cell !== null).length} 步</span>
+                </div>
+                <div class="text-sm mt-1">位置: (${data.x}, ${data.y})</div>
+            `;
+            
+            moveHistory.appendChild(moveElement);
+            moveHistory.scrollTop = moveHistory.scrollHeight;
+        }
+
+        // 页面卸载时清理
+        window.addEventListener('beforeunload', function() {
+            if (socket && socket.connected) {
+                socket.disconnect();
+            }
+            stopPingInterval();
+        });
+
+        // 定期刷新服务器状态
+        setInterval(fetchServerStatus, 30000);
+    </script>
+</body>
+</html>
