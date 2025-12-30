@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>五子棋游戏 - 在线对战版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#8B5A2B',
+                        secondary: '#D2B48C',
+                        board: '#DEB887',
+                        black: '#000000',
+                        white: '#FFFFFF',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .board-grid {
+                background-size: 100% 100%;
+                background-image: linear-gradient(to right, rgba(0,0,0,0.6) 1px, transparent 1px),
+                                  linear-gradient(to bottom, rgba(0,0,0,0.6) 1px, transparent 1px);
+            }
+            .piece-shadow {
+                filter: drop-shadow(0 4px 3px rgb(0 0 0 / 0.07)) drop-shadow(0 2px 2px rgb(0 0 0 / 0.06));
+            }
+            .piece-transition {
+                transition: all 0.2s ease-out;
+            }
+            .btn-hover {
+                transition: all 0.2s ease;
+            }
+            .btn-hover:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4 font-sans">
+    <div class="max-w-4xl w-full bg-white rounded-2xl shadow-xl overflow-hidden">
+        <div class="bg-primary text-white p-6 text-center">
+            <h1 class="text-[clamp(1.5rem,3vw,2.5rem)] font-bold">五子棋 - 在线对战</h1>
+            <p class="text-secondary mt-2">与好友一起在线对弈</p>
+        </div>
+        
+        <!-- 在线对战模式选择 -->
+        <div id="onlineMode" class="p-6 md:p-8">
+            <div class="text-center mb-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-2">选择游戏模式</h2>
+                <p class="text-gray-600">邀请好友一起玩，或创建房间等待对手</p>
+            </div>
+            
+            <div class="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+                <div class="bg-gray-50 rounded-xl p-6 shadow-sm border-2 border-transparent hover:border-primary/30 transition-all cursor-pointer" onclick="showCreateRoom()">
+                    <div class="text-center">
+                        <div class="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <i class="fa-solid fa-plus text-2xl text-primary"></i>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-2">创建房间</h3>
+                        <p class="text-gray-600 text-sm">创建新房间，邀请好友加入</p>
+                    </div>
+                </div>
+                
+                <div class="bg-gray-50 rounded-xl p-6 shadow-sm border-2 border-transparent hover:border-primary/30 transition-all cursor-pointer" onclick="showJoinRoom()">
+                    <div class="text-center">
+                        <div class="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <i class="fa-solid fa-sign-in text-2xl text-primary"></i>
+                        </div>
+                        <h3 class="text-xl font-semibold mb-2">加入房间</h3>
+                        <p class="text-gray-600 text-sm">输入房间号加入好友的游戏</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 创建房间界面 -->
+        <div id="createRoom" class="p-6 md:p-8 hidden">
+            <div class="max-w-md mx-auto">
+                <div class="text-center mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">创建游戏房间</h2>
+                    <p class="text-gray-600">创建房间后，分享房间号给好友</p>
+                </div>
+                
+                <div class="bg-gray-50 rounded-xl p-6 shadow-sm mb-6">
+                    <div class="mb-4">
+                        <label class="block text-gray-700 font-medium mb-2">房间名称</label>
+                        <input type="text" id="roomName" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary" placeholder="输入房间名称（可选）">
+                    </div>
+                    
+                    <div class="mb-6">
+                        <label class="block text-gray-700 font-medium mb-2">游戏设置</label>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-600">先手方</span>
+                            <select id="firstPlayer" class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary">
+                                <option value="creator">创建者</option>
+                                <option value="random">随机</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <button id="createRoomBtn" class="w-full bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-medium btn-hover flex items-center justify-center" onclick="createRoom()">
+                        <i class="fa-solid fa-plus-circle mr-2"></i>创建房间
+                    </button>
+                </div>
+                
+                <div class="text-center">
+                    <button class="text-primary hover:text-primary/80 font-medium flex items-center justify-center mx-auto" onclick="showOnlineMode()">
+                        <i class="fa-solid fa-arrow-left mr-2"></i>返回
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 加入房间界面 -->
+        <div id="joinRoom" class="p-6 md:p-8 hidden">
+            <div class="max-w-md mx-auto">
+                <div class="text-center mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">加入游戏房间</h2>
+                    <p class="text-gray-600">输入好友分享的房间号</p>
+                </div>
+                
+                <div class="bg-gray-50 rounded-xl p-6 shadow-sm mb-6">
+                    <div class="mb-6">
+                        <label class="block text-gray-700 font-medium mb-2">房间号</label>
+                        <input type="text" id="roomCode" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary" placeholder="输入6位房间号">
+                    </div>
+                    
+                    <button id="joinRoomBtn" class="w-full bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-medium btn-hover flex items-center justify-center" onclick="joinRoom()">
+                        <i class="fa-solid fa-sign-in-alt mr-2"></i>加入房间
+                    </button>
+                </div>
+                
+                <div class="text-center">
+                    <button class="text-primary hover:text-primary/80 font-medium flex items-center justify-center mx-auto" onclick="showOnlineMode()">
+                        <i class="fa-solid fa-arrow-left mr-2"></i>返回
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 等待房间界面 -->
+        <div id="waitingRoom" class="p-6 md:p-8 hidden">
+            <div class="max-w-md mx-auto">
+                <div class="text-center mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">等待对手</h2>
+                    <p class="text-gray-600">分享房间号给好友，等待加入</p>
+                </div>
+                
+                <div class="bg-gray-50 rounded-xl p-6 shadow-sm mb-6">
+                    <div class="text-center mb-6">
+                        <div class="inline-block bg-primary/10 rounded-lg p-4 mb-4">
+                            <h3 class="text-3xl font-bold text-primary" id="waitingRoomCode">----</h3>
+                        </div>
+                        <p class="text-gray-600 text-sm">房间号</p>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-gray-700 font-medium">房间名称</span>
+                            <span id="waitingRoomName" class="text-gray-900">五子棋房间</span>
+                        </div>
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-gray-700 font-medium">玩家</span>
+                            <span id="waitingPlayers" class="text-gray-900">1/2</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-700 font-medium">状态</span>
+                            <span class="text-yellow-600 font-medium flex items-center">
+                                <i class="fa-solid fa-spinner fa-spin mr-1"></i>
+                                等待中
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="flex gap-3">
+                        <button class="flex-1 bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-medium btn-hover flex items-center justify-center" onclick="copyRoomCode()">
+                            <i class="fa-solid fa-copy mr-2"></i>复制房间号
+                        </button>
+                        <button class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-3 px-4 rounded-lg font-medium btn-hover flex items-center justify-center" onclick="leaveRoom()">
+                            <i class="fa-solid fa-times mr-2"></i>离开
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 游戏界面 -->
+        <div id="gameArea" class="p-6 md:p-8 flex flex-col md:flex-row gap-6 hidden">
+            <!-- 游戏区域 -->
+            <div class="flex-1 relative">
+                <div class="aspect-square bg-board rounded-lg shadow-lg overflow-hidden board-grid" style="background-size: calc(100% / 14) calc(100% / 14);">
+                    <canvas id="gameCanvas" class="w-full h-full cursor-pointer"></canvas>
+                </div>
+                
+                <div id="gameStatus" class="mt-4 p-3 bg-secondary/20 rounded-lg text-center">
+                    <p id="statusText" class="font-medium">游戏开始! 黑棋先行</p>
+                </div>
+            </div>
+            
+            <!-- 游戏控制和信息 -->
+            <div class="w-full md:w-80 flex flex-col gap-6">
+                <div class="bg-gray-50 rounded-lg p-5 shadow-sm">
+                    <h2 class="text-lg font-semibold mb-3 flex items-center">
+                        <i class="fa-solid fa-users mr-2 text-primary"></i>玩家信息
+                    </h2>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-600">当前回合</span>
+                            <div class="flex items-center">
+                                <div id="currentPlayer" class="w-6 h-6 rounded-full bg-black mr-2 piece-shadow"></div>
+                                <span id="playerText">黑棋</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-600">你的身份</span>
+                            <div class="flex items-center">
+                                <div id="myPlayer" class="w-6 h-6 rounded-full bg-white border border-gray-300 mr-2 piece-shadow"></div>
+                                <span id="myPlayerText">白棋</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-600">对手</span>
+                            <span id="opponentName" class="font-medium">等待中...</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-600">游戏时间</span>
+                            <span id="gameTime" class="font-mono">00:00</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-600">步数</span>
+                            <span id="moveCount">0</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-gray-50 rounded-lg p-5 shadow-sm">
+                    <h2 class="text-lg font-semibold mb-3 flex items-center">
+                        <i class="fa-solid fa-crown mr-2 text-primary"></i>游戏规则
+                    </h2>
+                    <ul class="text-sm text-gray-600 space-y-2">
+                        <li class="flex items-start">
+                            <i class="fa-solid fa-circle text-xs mt-1.5 mr-2 text-primary"></i>
+                            <span>黑棋和白棋轮流在棋盘上落子</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa-solid fa-circle text-xs mt-1.5 mr-2 text-primary"></i>
+                            <span>先在横、竖或斜方向形成五子连线者获胜</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fa-solid fa-circle text-xs mt-1.5 mr-2 text-primary"></i>
+                            <span>轮到你时点击棋盘放置棋子</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <div class="flex gap-3">
+                    <button id="restartBtn" class="flex-1 bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-medium btn-hover flex items-center justify-center" onclick="requestRestart()">
+                        <i class="fa-solid fa-refresh mr-2"></i>重新开始
+                    </button>
+                    <button id="leaveGameBtn" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-3 px-4 rounded-lg font-medium btn-hover flex items-center justify-center" onclick="confirmLeaveGame()">
+                        <i class="fa-solid fa-sign-out-alt mr-2"></i>离开
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-gray-50 p-4 text-center text-sm text-gray-500">
+            <p>© 2025 五子棋游戏 | 在线对战版</p>
+        </div>
+    </div>
+
+    <!-- 胜利提示模态框 -->
+    <div id="winModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-xl p-8 max-w-md w-full mx-4 transform transition-transform duration-300 scale-95">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fa-solid fa-trophy text-3xl text-yellow-500"></i>
+                </div>
+                <h2 class="text-2xl font-bold mb-2" id="winnerText">黑棋获胜!</h2>
+                <p class="text-gray-600 mb-6">恭喜您赢得了这场精彩的比赛!</p>
+                <div class="flex gap-3">
+                    <button id="newGameBtn" class="flex-1 bg-primary hover:bg-primary/90 text-white py-3 px-4 rounded-lg font-medium btn-hover" onclick="requestRestart()">
+                        再来一局
+                    </button>
+                    <button id="backToLobbyBtn" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-3 px-4 rounded-lg font-medium btn-hover" onclick="backToLobby()">
+                        返回大厅
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 消息提示 -->
+    <div id="toast" class="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform translate-x-full transition-transform duration-300 z-50">
+        <div class="flex items-center">
+            <i class="fa-solid fa-check-circle mr-2"></i>
+            <span id="toastMessage">操作成功</span>
+        </div>
+    </div>
+
+    <!-- 确认对话框 -->
+    <div id="confirmModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4 transform transition-transform duration-300 scale-95">
+            <h3 class="text-xl font-bold mb-3" id="confirmTitle">确认操作</h3>
+            <p class="text-gray-600 mb-6" id="confirmMessage">您确定要执行此操作吗？</p>
+            <div class="flex gap-3">
+                <button id="confirmBtn" class="flex-1 bg-primary hover:bg-primary/90 text-white py-2 px-4 rounded-lg font-medium btn-hover">
+                    确认
+                </button>
+                <button id="cancelBtn" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 px-4 rounded-lg font-medium btn-hover" onclick="hideConfirmModal()">
+                    取消
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let socket;
+        let gameId = null;
+        let playerId = null;
+        let myColor = 0; // 0: 未分配, 1: 黑棋, 2: 白棋
+        let gameActive = false;
+        let isMyTurn = false;
+        
+        // 游戏常量
+        const BOARD_SIZE = 15;
+        const CELL_SIZE = Math.min(window.innerWidth * 0.8 / BOARD_SIZE, window.innerHeight * 0.6 / BOARD_SIZE);
+        const PIECE_SIZE = CELL_SIZE * 0.8;
+        
+        // 游戏状态
+        let gameBoard = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(0));
+        let moveHistory = [];
+        let gameTime = 0;
+        let timerInterval;
+        
+        // DOM元素
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            initCanvas();
+            initEventListeners();
+            connectToServer();
+        });
+        
+        // 初始化Canvas
+        function initCanvas() {
+            canvas.width = CELL_SIZE * (BOARD_SIZE - 1);
+            canvas.height = CELL_SIZE * (BOARD_SIZE - 1);
+        }
+        
+        // 初始化事件监听器
+        function initEventListeners() {
+            // 确认对话框
+            document.getElementById('confirmBtn').addEventListener('click', () => {
+                const action = document.getElementById('confirmBtn').dataset.action;
+                hideConfirmModal();
+                
+                if (action === 'leaveGame') {
+                    leaveGame();
+                } else if (action === 'leaveRoom') {
+                    leaveRoom();
+                }
+            });
+        }
+        
+        // 连接到服务器（模拟）
+        function connectToServer() {
+            // 模拟WebSocket连接
+            console.log('正在连接到游戏服务器...');
+            
+            // 模拟连接成功
+            setTimeout(() => {
+                showToast('已连接到游戏服务器', 'success');
+                playerId = 'player_' + Math.random().toString(36).substr(2, 9);
+                console.log('玩家ID:', playerId);
+            }, 1000);
+        }
+        
+        // 创建房间
+        function createRoom() {
+            const roomName = document.getElementById('roomName').value || '五子棋房间';
+            const firstPlayer = document.getElementById('firstPlayer').value;
+            
+            console.log('创建房间:', { roomName, firstPlayer });
+            
+            // 模拟创建房间
+            setTimeout(() => {
+                gameId = Math.random().toString().substr(2, 6);
+                showToast('房间创建成功', 'success');
+                
+                // 显示等待房间
+                document.getElementById('waitingRoomCode').textContent = gameId;
+                document.getElementById('waitingRoomName').textContent = roomName;
+                
+                showWaitingRoom();
+                
+                // 模拟对手加入（用于演示）
+                setTimeout(() => {
+                    if (document.getElementById('waitingRoom').style.display !== 'none') {
+                        simulateOpponentJoin();
+                    }
+                }, 5000);
+            }, 1000);
+        }
+        
+        // 加入房间
+        function joinRoom() {
+            const roomCode = document.getElementById('roomCode').value.trim();
+            
+            if (!roomCode || roomCode.length !== 6) {
+                showToast('请输入有效的6位房间号', 'error');
+                return;
+            }
+            
+            console.log('加入房间:', roomCode);
+            
+            // 模拟加入房间
+            setTimeout(() => {
+                gameId = roomCode;
+                showToast('成功加入房间', 'success');
+                
+                // 显示等待房间
+                document.getElementById('waitingRoomCode').textContent = gameId;
+                document.getElementById('waitingPlayers').textContent = '2/2';
+                
+                showWaitingRoom();
+                
+                // 模拟游戏开始
+                setTimeout(() => {
+                    simulateGameStart(2); // 作为白棋加入
+                }, 2000);
+            }, 1000);
+        }
+        
+        // 模拟对手加入（演示用）
+        function simulateOpponentJoin() {
+            document.getElementById('waitingPlayers').textContent = '2/2';
+            document.getElementById('opponentName').textContent = '对手玩家';
+            
+            showToast('对手已加入房间', 'success');
+            
+            // 模拟游戏开始
+            setTimeout(() => {
+                simulateGameStart(1); // 创建者作为黑棋
+            }, 2000);
+        }
+        
+        // 模拟游戏开始（演示用）
+        function simulateGameStart(color) {
+            myColor = color;
+            gameActive = true;
+            isMyTurn = (color === 1); // 黑棋先行
+            
+            // 初始化游戏
+            initGame();
+            
+            // 显示游戏界面
+            showGameArea();
+            
+            // 更新UI
+            updatePlayerInfo();
+            updateGameStatus();
+            
+            if (isMyTurn) {
+                showToast('游戏开始，轮到您下棋', 'success');
+            } else {
+                showToast('游戏开始，请等待对手', 'info');
+            }
+        }
+        
+        // 初始化游戏
+        function initGame() {
+            gameBoard = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(0));
+            moveHistory = [];
+            gameTime = 0;
+            
+            drawBoard();
+            updateGameStatus();
+            gameTimeEl.textContent = '00:00';
+            
+            startTimer();
+        }
+        
+        // 绘制棋盘
+        function drawBoard() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制网格线
+            ctx.strokeStyle = '#8B4513';
+            ctx.lineWidth = 1.5;
+            
+            for (let i = 0; i < BOARD_SIZE; i++) {
+                // 水平线
+                ctx.beginPath();
+                ctx.moveTo(0, i * CELL_SIZE);
+                ctx.lineTo(canvas.width, i * CELL_SIZE);
+                ctx.stroke();
+                
+                // 垂直线
+                ctx.beginPath();
+                ctx.moveTo(i * CELL_SIZE, 0);
+                ctx.lineTo(i * CELL_SIZE, canvas.height);
+                ctx.stroke();
+            }
+            
+            // 绘制天元和星位
+            const starPoints = [
+                {x: 3, y: 3}, {x: 3, y: 11}, {x: 7, y: 7}, 
+                {x: 11, y: 3}, {x: 11, y: 11}
+            ];
+            
+            starPoints.forEach(point => {
+                ctx.beginPath();
+                ctx.arc(point.x * CELL_SIZE, point.y * CELL_SIZE, 4, 0, Math.PI * 2);
+                ctx.fillStyle = '#8B4513';
+                ctx.fill();
+            });
+            
+            // 绘制棋子
+            for (let i = 0; i < BOARD_SIZE; i++) {
+                for (let j = 0; j < BOARD_SIZE; j++) {
+                    if (gameBoard[i][j] !== 0) {
+                        drawPiece(i, j, gameBoard[i][j]);
+                    }
+                }
+            }
+        }
+        
+        // 绘制棋子
+        function drawPiece(row, col, player) {
+            const x = col * CELL_SIZE;
+            const y = row * CELL_SIZE;
+            
+            // 棋子阴影
+            ctx.beginPath();
+            ctx.arc(x, y, PIECE_SIZE / 2 + 2, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.fill();
+            
+            // 棋子本体
+            ctx.beginPath();
+            ctx.arc(x, y, PIECE_SIZE / 2, 0, Math.PI * 2);
+            
+            if (player === 1) {
+                // 黑棋 - 渐变效果
+                const gradient = ctx.createRadialGradient(
+                    x - PIECE_SIZE / 6, y - PIECE_SIZE / 6, PIECE_SIZE / 10,
+                    x, y, PIECE_SIZE / 2
+                );
+                gradient.addColorStop(0, '#555');
+                gradient.addColorStop(1, '#000');
+                ctx.fillStyle = gradient;
+            } else {
+                // 白棋 - 渐变效果
+                const gradient = ctx.createRadialGradient(
+                    x - PIECE_SIZE / 6, y - PIECE_SIZE / 6, PIECE_SIZE / 10,
+                    x, y, PIECE_SIZE / 2
+                );
+                gradient.addColorStop(0, '#fff');
+                gradient.addColorStop(1, '#ddd');
+                ctx.fillStyle = gradient;
+            }
+            
+            ctx.fill();
+            
+            // 棋子边缘
+            ctx.strokeStyle = player === 1 ? '#333' : '#ccc';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+        
+        // 处理棋子放置
+        function handlePiecePlacement(row, col) {
+            if (!gameActive || !isMyTurn) return;
+            
+            // 检查位置是否有效
+            if (row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE && gameBoard[row][col] === 0) {
+                // 放置棋子
+                gameBoard[row][col] = myColor;
+                moveHistory.push({row, col, player: myColor});
+                
+                drawBoard();
+                updateGameStatus();
+                
+                // 模拟发送移动到服务器
+                simulateMoveToServer(row, col);
+                
+                // 检查胜利
+                if (checkWin(row, col, myColor)) {
+                    handleWin(myColor);
+                    return;
+                }
+                
+                // 检查平局
+                if (checkDraw()) {
+                    handleDraw();
+                    return;
+                }
+                
+                // 切换回合
+                isMyTurn = false;
+                updateGameStatus();
+                showToast('等待对手下棋...', 'info');
+            }
+        }
+        
+        // 模拟发送移动到服务器
+        function simulateMoveToServer(row, col) {
+            console.log('发送移动:', { row, col, player: myColor });
+            
+            // 模拟对手回应（演示用）
+            if (gameActive) {
+                setTimeout(() => {
+                    simulateOpponentMove();
+                }, 2000);
+            }
+        }
+        
+        // 模拟对手移动（演示用）
+        function simulateOpponentMove() {
+            if (!gameActive) return;
+            
+            // 简单AI：随机找一个空位
+            let availableMoves = [];
+            for (let i = 0; i < BOARD_SIZE; i++) {
+                for (let j = 0; j < BOARD_SIZE; j++) {
+                    if (gameBoard[i][j] === 0) {
+                        availableMoves.push({row: i, col: j});
+                    }
+                }
+            }
+            
+            if (availableMoves.length > 0) {
+                const move = availableMoves[Math.floor(Math.random() * availableMoves.length)];
+                const opponentColor = myColor === 1 ? 2 : 1;
+                
+                gameBoard[move.row][move.col] = opponentColor;
+                moveHistory.push({row: move.row, col: move.col, player: opponentColor});
+                
+                drawBoard();
+                updateGameStatus();
+                
+                // 检查对手胜利
+                if (checkWin(move.row, move.col, opponentColor)) {
+                    handleWin(opponentColor);
+                    return;
+                }
+                
+                // 检查平局
+                if (checkDraw()) {
+                    handleDraw();
+                    return;
+                }
+                
+                // 切换回合
+                isMyTurn = true;
+                updateGameStatus();
+                showToast('轮到您下棋', 'success');
+            }
+        }
+        
+        // 检查胜利条件
+        function checkWin(row, col, player) {
+            const directions = [
+                [1, 0],   // 水平
+                [0, 1],   // 垂直
+                [1, 1],   // 对角线
+                [1, -1]   // 反对角线
+            ];
+            
+            for (const [dx, dy] of directions) {
+                let count = 1;  // 当前位置已经有一个棋子
+                
+                // 正向检查
+                for (let i = 1; i < 5; i++) {
+                    const newRow = row + i * dy;
+                    const newCol = col + i * dx;
+                    
+                    if (newRow < 0 || newRow >= BOARD_SIZE || newCol < 0 || newCol >= BOARD_SIZE) {
+                        break;
+                    }
+                    
+                    if (gameBoard[newRow][newCol] === player) {
+                        count++;
+                    } else {
+                        break;
+                    }
+                }
+                
+                // 反向检查
+                for (let i = 1; i < 5; i++) {
+                    const newRow = row - i * dy;
+                    const newCol = col - i * dx;
+                    
+                    if (newRow < 0 || newRow >= BOARD_SIZE || newCol < 0 || newCol >= BOARD_SIZE) {
+                        break;
+                    }
+                    
+                    if (gameBoard[newRow][newCol] === player) {
+                        count++;
+                    } else {
+                        break;
+                    }
+                }
+                
+                if (count >= 5) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+        
+        // 检查平局
+        function checkDraw() {
+            for (let i = 0; i < BOARD_SIZE; i++) {
+                for (let j = 0; j < BOARD_SIZE; j++) {
+                    if (gameBoard[i][j] === 0) {
+                        return false; // 还有空位，不是平局
+                    }
+                }
+            }
+            return true; // 棋盘已满，平局
+        }
+        
+        // 处理胜利
+        function handleWin(winner) {
+            gameActive = false;
+            stopTimer();
+            
+            const winnerText = winner === myColor ? '您获胜了!' : '对手获胜了!';
+            document.getElementById('winnerText').textContent = winnerText;
+            
+            showWinModal();
+        }
+        
+        // 处理平局
+        function handleDraw() {
+            gameActive = false;
+            stopTimer();
+            
+            document.getElementById('winnerText').textContent = '平局!';
+            showWinModal();
+        }
+        
+        // 更新玩家信息
+        function updatePlayerInfo() {
+            const myPlayerEl = document.getElementById('myPlayer');
+            const myPlayerTextEl = document.getElementById('myPlayerText');
+            const currentPlayerEl = document.getElementById('currentPlayer');
+            const playerTextEl = document.getElementById('playerText');
+            
+            if (myColor === 1) {
+                myPlayerEl.className = 'w-6 h-6 rounded-full bg-black mr-2 piece-shadow';
+                myPlayerTextEl.textContent = '黑棋';
+            } else {
+                myPlayerEl.className = 'w-6 h-6 rounded-full bg-white border border-gray-300 mr-2 piece-shadow';
+                myPlayerTextEl.textContent = '白棋';
+            }
+            
+            updateGameStatus();
+        }
+        
+        // 更新游戏状态显示
+        function updateGameStatus() {
+            const statusText = document.getElementById('statusText');
+            const currentPlayerEl = document.getElementById('currentPlayer');
+            const playerTextEl = document.getElementById('playerText');
+            const moveCountEl = document.getElementById('moveCount');
+            
+            if (gameActive) {
+                if (isMyTurn) {
+                    statusText.textContent = '轮到您下棋';
+                    statusText.className = 'font-medium text-green-600';
+                } else {
+                    statusText.textContent = '等待对手下棋...';
+                    statusText.className = 'font-medium text-yellow-600';
+                }
+                
+                const currentColor = isMyTurn ? myColor : (myColor === 1 ? 2 : 1);
+                if (currentColor === 1) {
+                    currentPlayerEl.className = 'w-6 h-6 rounded-full bg-black mr-2 piece-shadow';
+                    playerTextEl.textContent = '黑棋';
+                } else {
+                    currentPlayerEl.className = 'w-6 h-6 rounded-full bg-white border border-gray-300 mr-2 piece-shadow';
+                    playerTextEl.textContent = '白棋';
+                }
+            }
+            
+            moveCountEl.textContent = moveHistory.length;
+        }
+        
+        // 更新游戏时间
+        function updateGameTime() {
+            gameTime++;
+            const minutes = Math.floor(gameTime / 60).toString().padStart(2, '0');
+            const seconds = (gameTime % 60).toString().padStart(2, '0');
+            document.getElementById('gameTime').textContent = `${minutes}:${seconds}`;
+        }
+        
+        // 开始计时
+        function startTimer() {
+            clearInterval(timerInterval);
+            timerInterval = setInterval(updateGameTime, 1000);
+        }
+        
+        // 停止计时
+        function stopTimer() {
+            clearInterval(timerInterval);
+        }
+        
+        // 界面切换函数
+        function showOnlineMode() {
+            hideAllScreens();
+            document.getElementById('onlineMode').classList.remove('hidden');
+        }
+        
+        function showCreateRoom() {
+            hideAllScreens();
+            document.getElementById('createRoom').classList.remove('hidden');
+        }
+        
+        function showJoinRoom() {
+            hideAllScreens();
+            document.getElementById('joinRoom').classList.remove('hidden');
+        }
+        
+        function showWaitingRoom() {
+            hideAllScreens();
+            document.getElementById('waitingRoom').classList.remove('hidden');
+        }
+        
+        function showGameArea() {
+            hideAllScreens();
+            document.getElementById('gameArea').classList.remove('hidden');
+            
+            // 添加棋盘点击事件
+            canvas.addEventListener('click', handleCanvasClick);
+            canvas.addEventListener('mousemove', handleCanvasMouseMove);
+            canvas.addEventListener('mouseleave', handleCanvasMouseLeave);
+        }
+        
+        function hideAllScreens() {
+            document.getElementById('onlineMode').classList.add('hidden');
+            document.getElementById('createRoom').classList.add('hidden');
+            document.getElementById('joinRoom').classList.add('hidden');
+            document.getElementById('waitingRoom').classList.add('hidden');
+            document.getElementById('gameArea').classList.add('hidden');
+        }
+        
+        // Canvas事件处理
+        function handleCanvasClick(e) {
+            if (!gameActive || !isMyTurn) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+            
+            const col = Math.round(x / CELL_SIZE);
+            const row = Math.round(y / CELL_SIZE);
+            
+            handlePiecePlacement(row, col);
+        }
+        
+        function handleCanvasMouseMove(e) {
+            if (!gameActive || !isMyTurn) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+            
+            const col = Math.round(x / CELL_SIZE);
+            const row = Math.round(y / CELL_SIZE);
+            
+            // 重绘棋盘
+            drawBoard();
+            
+            // 绘制预览棋子
+            if (row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE && gameBoard[row][col] === 0) {
+                ctx.beginPath();
+                ctx.arc(col * CELL_SIZE, row * CELL_SIZE, PIECE_SIZE / 2, 0, Math.PI * 2);
+                ctx.fillStyle = myColor === 1 ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255, 255, 255, 0.6)';
+                ctx.fill();
+            }
+        }
+        
+        function handleCanvasMouseLeave() {
+            if (gameActive) {
+                drawBoard();
+            }
+        }
+        
+        // 游戏控制函数
+        function requestRestart() {
+            // 模拟重新开始请求
+            showToast('请求重新开始游戏...', 'info');
+            
+            // 模拟对手同意（演示用）
+            setTimeout(() => {
+                showToast('对手同意重新开始', 'success');
+                simulateGameStart(myColor);
+            }, 1500);
+        }
+        
+        function confirmLeaveGame() {
+            showConfirmModal('离开游戏', '确定要离开当前游戏吗？', 'leaveGame');
+        }
+        
+        function leaveGame() {
+            gameActive = false;
+            stopTimer();
+            
+            // 重置游戏状态
+            myColor = 0;
+            gameId = null;
+            
+            // 返回大厅
+            showOnlineMode();
+            showToast('已离开游戏', 'info');
+        }
+        
+        function leaveRoom() {
+            showConfirmModal('离开房间', '确定要离开当前房间吗？', 'leaveRoom');
+        }
+        
+        function backToLobby() {
+            hideWinModal();
+            leaveGame();
+        }
+        
+        // 工具函数
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toastMessage');
+            
+            toastMessage.textContent = message;
+            
+            // 设置颜色
+            if (type === 'success') {
+                toast.className = toast.className.replace(/bg-\w+-500/, 'bg-green-500');
+            } else if (type === 'error') {
+                toast.className = toast.className.replace(/bg-\w+-500/, 'bg-red-500');
+            } else if (type === 'warning') {
+                toast.className = toast.className.replace(/bg-\w+-500/, 'bg-yellow-500');
+            } else {
+                toast.className = toast.className.replace(/bg-\w+-500/, 'bg-blue-500');
+            }
+            
+            // 显示toast
+            toast.classList.remove('translate-x-full');
+            
+            // 3秒后隐藏
+            setTimeout(() => {
+                toast.classList.add('translate-x-full');
+            }, 3000);
+        }
+        
+        function showConfirmModal(title, message, action) {
+            const modal = document.getElementById('confirmModal');
+            const titleEl = document.getElementById('confirmTitle');
+            const messageEl = document.getElementById('confirmMessage');
+            const confirmBtn = document.getElementById('confirmBtn');
+            
+            titleEl.textContent = title;
+            messageEl.textContent = message;
+            confirmBtn.dataset.action = action;
+            
+            modal.classList.remove('hidden');
+            
+            // 添加动画
+            setTimeout(() => {
+                modal.classList.add('opacity-100');
+                modal.querySelector('div').classList.remove('scale-95');
+                modal.querySelector('div').classList.add('scale-100');
+            }, 10);
+        }
+        
+        function hideConfirmModal() {
+            const modal = document.getElementById('confirmModal');
+            
+            modal.classList.remove('opacity-100');
+            modal.querySelector('div').classList.remove('scale-100');
+            modal.querySelector('div').classList.add('scale-95');
+            
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+        
+        function showWinModal() {
+            const modal = document.getElementById('winModal');
+            
+            modal.classList.remove('hidden');
+            
+            // 添加动画效果
+            setTimeout(() => {
+                modal.classList.add('opacity-100');
+                modal.querySelector('div').classList.remove('scale-95');
+                modal.querySelector('div').classList.add('scale-100');
+            }, 10);
+        }
+        
+        function hideWinModal() {
+            const modal = document.getElementById('winModal');
+            
+            modal.classList.remove('opacity-100');
+            modal.querySelector('div').classList.remove('scale-100');
+            modal.querySelector('div').classList.add('scale-95');
+            
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+        
+        function copyRoomCode() {
+            const roomCode = document.getElementById('waitingRoomCode').textContent;
+            
+            // 复制到剪贴板
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(roomCode).then(() => {
+                    showToast('房间号已复制到剪贴板', 'success');
+                }).catch(() => {
+                    showToast('复制失败，请手动复制', 'error');
+                });
+            } else {
+                // 备用方法
+                const textArea = document.createElement('textarea');
+                textArea.value = roomCode;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                showToast('房间号已复制到剪贴板', 'success');
+            }
+        }
+    </script>
+</body>
+</html>
